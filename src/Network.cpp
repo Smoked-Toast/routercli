@@ -43,5 +43,6 @@ int is_interface_online(std::string interface) {
             return 1;
         }
     }
+    
     return 0;
 }
