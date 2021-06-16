@@ -13,7 +13,6 @@ Deployment::~Deployment(){
     delete [] ram;
     delete [] vcpu;
     delete [] ostype;
-    delete [] vni;
     delete [] mac;
     delete [] bootdisk;
     delete [] configdisk;
@@ -22,6 +21,7 @@ Deployment::~Deployment(){
 
 
 int Deployment::add(char * name, char * property){
+
     if (strcmp(name,"vmid")==0){
         vmid = property;
     }
@@ -53,11 +53,12 @@ bool Testid(std::string id){
 Command ParseArgs(int argc, char *argv[]) {
     Command mycmd;
 
-    const char *const short_opts = "a:v:h";
-    const option long_opts[] = {
-        {"action", required_argument, nullptr, 'a'},
-        {"vni", required_argument, nullptr, 'v'},
-        {"help", no_argument, nullptr, 'h'}};
+    const char * short_opts = "a:v:h";
+    const struct option long_opts[] = {
+        {"action", required_argument, 0, 'a'},
+        {"vni", required_argument, 0, 'v'},
+        {"help", no_argument, 0, 'h'},
+        {nullptr, no_argument, nullptr, 0}};
     mycmd.action = ERROR;
     mycmd.error = "Error: Bad input for action.";
 
@@ -101,16 +102,20 @@ Deployment* ParseDeployment(char * file) {
             if (i >= 1){
                 std::string n = line.substr(0, i);
                 std::string p = line.substr(i+1);
-                char * name = new char[n.length()];
-                char * property = new char[n.length()];
+                char * name = new char[n.length()+1];
+                char * property = new char[p.length()+1];
                 strcpy(name, n.c_str());
                 strcpy(property, p.c_str());
 
                 int res = d->add(name, property);
                 if (res == EXIT_FAILURE){
+                    delete [] name;
+                    delete [] property;
+                    delete d;
                     printf("Error: adding attribute: %s", name);
                     return NULL;
                 }
+                delete [] name;
             }
         }
         newfile.close();

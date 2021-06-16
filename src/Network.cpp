@@ -38,12 +38,10 @@ int is_interface_online(std::string interface) {
     }
     freeifaddrs(addresses);
 
-    if (std::find(inets.begin(), inets.end(), interface) != inets.end())
-    {
-        return 1;
+    for (size_t i = 0; i < inets.size(); i++){
+        if (strcmp(inets[i], interface.c_str())){
+            return 1;
+        }
     }
-    else
-    {
-        return 0;
-    }
+    return 0;
 }

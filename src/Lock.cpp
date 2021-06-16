@@ -15,12 +15,12 @@ int createLock(char * hostname, char * lpath) {
         char * lockname = getLockHostname(lpath);
         // If the lock exists, but it belongs to this computer.
         if (strcmp(lockname, hostname) == 0){
-            delete lockname;
+            delete [] lockname;
             return 1;
         }
         // If the lock exists and it doesnt belong to this computer
         else {
-            delete lockname;
+            delete [] lockname;
             return -1;
         }
     } 
@@ -44,7 +44,7 @@ int deleteLock(char * hostname, char * lpath){
 
         // If the lock exists and it belongs to this computer.
         if (strcmp(lockname, hostname) == 0){
-            delete lockname;
+            delete [] lockname;
 
             int status;
             if((status = remove(lpath)) != 0){
@@ -54,7 +54,7 @@ int deleteLock(char * hostname, char * lpath){
         }
         // If the lock exists, but it doesnt belong to this computer
         else {
-            delete lockname;
+            delete [] lockname;
             return -1;
         }
     } 

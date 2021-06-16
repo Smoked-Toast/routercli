@@ -176,10 +176,16 @@ int Controller::execute(int argc, char *argv[])
             printf("started interface");
         }
         this->Sandbox(&spawnvm[0]);
+        goto EXIT_DEPLOY;
 
     EXIT_DEPLOY:
-        delete d;
-        delete n;
+        delete [] hostname;
+        if (d != NULL){
+            delete d;
+        }
+        if (n != NULL){
+            delete n;
+        }
     }
     else if (cmd.action == DESTROY)
     {
@@ -235,9 +241,17 @@ int Controller::execute(int argc, char *argv[])
 
         this->Sandbox(&destroyvm[0]);
         this->Sandbox(&undefinevm[0]);
+
+        goto EXIT_DESTROY;
     EXIT_DESTROY:   
-        delete d;
-        delete n;
+        delete [] hostname;
+
+        if (d != NULL){
+            delete d;
+        }
+        if (n != NULL){
+            delete n;
+        }
     }
 
     return retval;
