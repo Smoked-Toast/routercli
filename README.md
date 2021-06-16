@@ -22,5 +22,5 @@ make install
 
 ## Get Usage
 ```
-./hypercli 
+./routercli
 ```
