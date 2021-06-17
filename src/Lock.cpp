@@ -5,6 +5,7 @@
 #include <unistd.h>
 #include <limits.h>
 
+
 int createLock(char * hostname, char * lpath) {   
 
     std::ifstream ifile;
@@ -47,6 +48,7 @@ int deleteLock(char * hostname, char * lpath){
             delete [] lockname;
 
             int status;
+
             if((status = remove(lpath)) != 0){
                 return -1;
             }

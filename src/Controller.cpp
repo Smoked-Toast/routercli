@@ -4,7 +4,7 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
-
+#include <iostream>
 #include "../include/Lock.hpp"
 #include "../include/Parser.hpp"
 #include "../include/Controller.hpp"
@@ -128,6 +128,16 @@ int Controller::execute(int argc, char *argv[])
         char *hostname;
         Network * n;
 
+        FILE * fp;
+        char cmd[1500];
+        const char * ip = "192.168.1.102";
+        const char * cmd1 = "sudo ip link add vxlan1 type vxlan id 1 dev eth0 dstport 0";
+        const char * cmd2 = "sudo bridge fdb append to 00:00:00:00:00:00 dst 192.168.1.14 dev vxlan1";
+        const char * cmd3 = "sudo ip addr add 192.168.200.1/24 dev vxlan1";
+        const char * cmd4 = "sudo ip link set up dev vxlan1";
+        sprintf(cmd, "ssh -t dc-user@%s '%s ; %s ; %s ; %s'", ip, cmd1, cmd2, cmd3, cmd4);
+        int iteration = 0;
+
         // Build deployment object
         if ((d = ParseDeployment(dpath)) == NULL)
         {
@@ -176,6 +186,32 @@ int Controller::execute(int argc, char *argv[])
             printf("started interface");
         }
         this->Sandbox(&spawnvm[0]);
+
+
+        // TODO
+        // CLEAN
+        
+        while (true){
+            std::cout << "Iteration: " << iteration << std::endl;
+            if (!(fp =  popen(cmd, "r"))) {
+                fprintf( stderr, "Could not execute command \n" );
+                break;
+            }
+            
+            int retval;
+            if ((retval = pclose(fp)) == 0){
+                break;
+            }
+            iteration ++;
+
+            if (iteration > 50){
+                break;
+            }
+            
+            sleep(30);
+            
+        }
+
         goto EXIT_DEPLOY;
 
     EXIT_DEPLOY:

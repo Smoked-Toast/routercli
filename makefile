@@ -1,26 +1,15 @@
 
 TARGET   = routercli
-CXXFLAGS = -g -Wall -Werror -pedantic-errors -fmessage-length=0
+CXXFLAGS = -g -Wall -Werror -pedantic-errors -fmessage-length=0 -pthread
 OBJPATH = bin
-COBJ = $(OBJPATH)/Controller.o $(OBJPATH)/ExecBuilder.o $(OBJPATH)/Lock.o $(OBJPATH)/Network.o $(OBJPATH)/Parser.o
+OBJPATHS = $(OBJPATH)/Controller.o $(OBJPATH)/ExecBuilder.o $(OBJPATH)/Lock.o $(OBJPATH)/Network.o $(OBJPATH)/Parser.o
+COBJ = Controller.o ExecBuilder.o Lock.o Network.o Parser.o
 
-all: init Controller ExecBuilder Lock Network Parser
-	g++ $(CXXFLAGS) src/$(TARGET).cpp -o $(TARGET) $(COBJ)
+all: $(COBJ)
+	g++ $(CXXFLAGS) src/$(TARGET).cpp -o $(TARGET) $(OBJPATHS)
 
-Controller:
-	g++ $(CXXFLAGS) src/Controller.cpp -c -o $(OBJPATH)/Controller.o
-
-ExecBuilder:
-	g++ $(CXXFLAGS) src/ExecBuilder.cpp -c -o $(OBJPATH)/ExecBuilder.o
-
-Lock:
-	g++ $(CXXFLAGS) src/Lock.cpp -c -o $(OBJPATH)/Lock.o
-
-Network:
-	g++ $(CXXFLAGS) src/Network.cpp -c -o $(OBJPATH)/Network.o
-
-Parser:
-	g++ $(CXXFLAGS) src/Parser.cpp -c -o $(OBJPATH)/Parser.o
+%.o: src/%.cpp
+	g++ $(CXXFLAGS) -c -o $(OBJPATH)/$@ $<
 
 clean:
 	@rm -f $(TARGET) $(OBJPATH)/*.o
