@@ -12,6 +12,8 @@
 #include "../include/Deployment.hpp"
 #include "../include/ExecBuilder.hpp"
 
+char * sshcmd(const char * ip, std::vector<const char *> * cmdbuilder);
+
 Controller::Controller() {}
 
 //TODO: give the caller the exit status of the sandboxed process.
@@ -123,25 +125,61 @@ int Controller::execute(int argc, char *argv[])
         sprintf(dpath, "/mnt/dcimages/networks/vxlan%s/config/deployment", cmd.vni.c_str());
         sprintf(lpath, "/mnt/dcimages/networks/vxlan%s/lock", cmd.vni.c_str());
 
-        Deployment *d;
+        Deployment *d = NULL;
 
-        char *hostname;
-        Network * n;
+        char *hostname = NULL;
+        Network * n = NULL;
 
-        FILE * fp;
-        char cmd[1500];
+        FILE * fp = NULL;
+        char * cmdstring = NULL;;
+
+        std::vector<const char *> cmdbuilder;
         const char * ip = "192.168.1.102";
-        const char * cmd1 = "sudo ip link add vxlan1 type vxlan id 1 dev eth0 dstport 0";
-        const char * cmd2 = "sudo bridge fdb append to 00:00:00:00:00:00 dst 192.168.1.14 dev vxlan1";
-        const char * cmd3 = "sudo ip addr add 192.168.200.1/24 dev vxlan1";
-        const char * cmd4 = "sudo ip link set up dev vxlan1";
-        sprintf(cmd, "ssh -t dc-user@%s '%s ; %s ; %s ; %s'", ip, cmd1, cmd2, cmd3, cmd4);
+        cmdbuilder.push_back("sudo ip link add vxlan1 type vxlan id 1 dev eth0 dstport 0");
+        cmdbuilder.push_back("sudo bridge fdb append to 00:00:00:00:00:00 dst 192.168.1.14 dev vxlan1");
+        cmdbuilder.push_back("sudo ip addr add 192.168.200.1/24 dev vxlan1");
+        cmdbuilder.push_back("sudo ip link set up dev vxlan1");
+        cmdbuilder.push_back("sudo echo 1 > /proc/sys/net/ipv4/icmp_echo_ignore_broadcasts");
+        cmdbuilder.push_back("sudo echo 0 > /proc/sys/net/ipv4/conf/all/accept_source_route");
+        cmdbuilder.push_back("sudo echo 1 > /proc/sys/net/ipv4/tcp_syncookies");
+        cmdbuilder.push_back("sudo echo 0 > /proc/sys/net/ipv4/conf/all/accept_redirects");
+        cmdbuilder.push_back("sudo echo 0 > /proc/sys/net/ipv4/conf/all/send_redirects");
+        cmdbuilder.push_back("sudo echo 1 > /proc/sys/net/ipv4/conf/all/rp_filter");
+        cmdbuilder.push_back("sudo iptables --flush");
+        cmdbuilder.push_back("sudo iptables --policy INPUT DROP");
+        cmdbuilder.push_back("sudo iptables --policy OUTPUT DROP");
+        cmdbuilder.push_back("sudo iptables --policy FORWARD DROP");
+        cmdbuilder.push_back("sudo iptables -A INPUT -m state --state ESTABLISHED,RELATED -j ACCEPT");
+        cmdbuilder.push_back("sudo iptables -A INPUT -s 192.168.1.0/24 -j ACCEPT");
+        cmdbuilder.push_back("sudo iptables -A INPUT -s 192.168.1.0/24 -d 192.168.1.0/24 -p icmp --icmp-type 8 -m state --state NEW,ESTABLISHED,RELATED -j ACCEPT");
+        cmdbuilder.push_back("sudo iptables -A INPUT -p tcp --dport 22 -s 192.168.1.0/24 -m state --state NEW -j ACCEPT");
+        cmdbuilder.push_back("sudo iptables -A FORWARD -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT");
+        cmdbuilder.push_back("sudo iptables -A FORWARD -d 192.168.1.0/24 -j DROP");
+        cmdbuilder.push_back("sudo iptables -A OUTPUT -m state --state NEW,ESTABLISHED,RELATED -j ACCEPT");
+        cmdbuilder.push_back("sudo iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE");
+        cmdbuilder.push_back("sudo iptables -A FORWARD -i vxlan1 -j ACCEPT");
+        cmdbuilder.push_back("sudo iptables -t nat -A PREROUTING -d 192.168.1.111 -j DNAT --to-destination 192.168.200.2");
+        cmdbuilder.push_back("sudo iptables -t nat -A POSTROUTING -s 192.168.200.2 -j SNAT --to-source 192.168.1.111");
+        cmdbuilder.push_back("sudo ip addr add 192.168.1.111/24 dev eth0");
+        // cmdbuilder.push_back("");
+        // cmdbuilder.push_back("");
+        // cmdbuilder.push_back("");
+        // cmdbuilder.push_back("");
+        // cmdbuilder.push_back("");
+
+
         int iteration = 0;
+        cmdstring = sshcmd(ip, &cmdbuilder);
+        if (cmdstring == NULL){
+            printf("Error: ssh command too large\n");
+            retval = EXIT_FAILURE;
+            goto EXIT_DEPLOY;
+        }
 
         // Build deployment object
         if ((d = ParseDeployment(dpath)) == NULL)
         {
-            printf("Error: parsing deployment");
+            printf("Error: parsing deployment\n");
             retval = EXIT_FAILURE;
             goto EXIT_DEPLOY;
         }
@@ -193,7 +231,7 @@ int Controller::execute(int argc, char *argv[])
         
         while (true){
             std::cout << "Iteration: " << iteration << std::endl;
-            if (!(fp =  popen(cmd, "r"))) {
+            if (!(fp =  popen(cmdstring, "r"))) {
                 fprintf( stderr, "Could not execute command \n" );
                 break;
             }
@@ -215,7 +253,12 @@ int Controller::execute(int argc, char *argv[])
         goto EXIT_DEPLOY;
 
     EXIT_DEPLOY:
-        delete [] hostname;
+        if (cmdstring != NULL){
+            delete [] cmdstring;
+        }
+        if (hostname != NULL){
+            delete [] hostname;
+        }
         if (d != NULL){
             delete d;
         }
@@ -280,8 +323,9 @@ int Controller::execute(int argc, char *argv[])
 
         goto EXIT_DESTROY;
     EXIT_DESTROY:   
-        delete [] hostname;
-
+        if (hostname != NULL){
+            delete [] hostname;
+        }
         if (d != NULL){
             delete d;
         }
@@ -291,4 +335,34 @@ int Controller::execute(int argc, char *argv[])
     }
 
     return retval;
+}
+
+char * sshcmd(const char * ip, std::vector<const char *> * cmdbuilder){
+    size_t len = 0;
+    int CMD_MAX = 10000;
+    char * buff = new char[CMD_MAX];
+
+    len += snprintf(buff + len, CMD_MAX - len, "ssh -t dc-user@%s '", ip);
+    for (size_t i = 0; i < cmdbuilder->size(); i++){
+        if (i == 0){
+            len += snprintf(buff + len, CMD_MAX - len, "%s ", (*cmdbuilder)[i]);
+        }
+        else {
+            len += snprintf(buff + len, CMD_MAX - len, "; %s ", (*cmdbuilder)[i]);
+        }
+        if (len == 0){
+            delete [] buff;
+            buff = NULL;
+            break;
+        }
+    }
+    if (buff != NULL){
+        len += snprintf(buff + len, CMD_MAX - len, "'");
+    }
+
+    if (len > strlen(buff)){
+        delete [] buff;
+        return NULL;
+    }
+    return buff;
 }
