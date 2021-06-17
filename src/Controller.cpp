@@ -139,27 +139,35 @@ int Controller::execute(int argc, char *argv[])
         cmdbuilder.push_back("sudo bridge fdb append to 00:00:00:00:00:00 dst 192.168.1.14 dev vxlan1");
         cmdbuilder.push_back("sudo ip addr add 192.168.200.1/24 dev vxlan1");
         cmdbuilder.push_back("sudo ip link set up dev vxlan1");
-        cmdbuilder.push_back("sudo echo 1 > /proc/sys/net/ipv4/icmp_echo_ignore_broadcasts");
-        cmdbuilder.push_back("sudo echo 0 > /proc/sys/net/ipv4/conf/all/accept_source_route");
-        cmdbuilder.push_back("sudo echo 1 > /proc/sys/net/ipv4/tcp_syncookies");
-        cmdbuilder.push_back("sudo echo 0 > /proc/sys/net/ipv4/conf/all/accept_redirects");
-        cmdbuilder.push_back("sudo echo 0 > /proc/sys/net/ipv4/conf/all/send_redirects");
-        cmdbuilder.push_back("sudo echo 1 > /proc/sys/net/ipv4/conf/all/rp_filter");
+        cmdbuilder.push_back("sudo echo 1 | sudo tee /proc/sys/net/ipv4/icmp_echo_ignore_broadcasts");
+        cmdbuilder.push_back("sudo echo 0 | sudo tee /proc/sys/net/ipv4/conf/all/accept_source_route");
+        cmdbuilder.push_back("sudo echo 1 | sudo tee /proc/sys/net/ipv4/tcp_syncookies");
+        cmdbuilder.push_back("sudo echo 0 | sudo tee /proc/sys/net/ipv4/conf/all/accept_redirects");
+        cmdbuilder.push_back("sudo echo 0 | sudo tee /proc/sys/net/ipv4/conf/all/send_redirects");
+        cmdbuilder.push_back("sudo echo 1 | sudo tee /proc/sys/net/ipv4/conf/all/rp_filter");
+        cmdbuilder.push_back("sudo echo 1 | sudo tee /proc/sys/net/ipv4/ip_forward");
         cmdbuilder.push_back("sudo iptables --flush");
         cmdbuilder.push_back("sudo iptables --policy INPUT DROP");
         cmdbuilder.push_back("sudo iptables --policy OUTPUT DROP");
         cmdbuilder.push_back("sudo iptables --policy FORWARD DROP");
+
         cmdbuilder.push_back("sudo iptables -A INPUT -m state --state ESTABLISHED,RELATED -j ACCEPT");
-        cmdbuilder.push_back("sudo iptables -A INPUT -s 192.168.1.0/24 -j ACCEPT");
         cmdbuilder.push_back("sudo iptables -A INPUT -s 192.168.1.0/24 -d 192.168.1.0/24 -p icmp --icmp-type 8 -m state --state NEW,ESTABLISHED,RELATED -j ACCEPT");
-        cmdbuilder.push_back("sudo iptables -A INPUT -p tcp --dport 22 -s 192.168.1.0/24 -m state --state NEW -j ACCEPT");
+        cmdbuilder.push_back("sudo iptables -A INPUT -s 192.168.200.0/24 -d 192.168.200.0/24 -p icmp --icmp-type 8 -m state --state NEW,ESTABLISHED,RELATED -j ACCEPT");
+        cmdbuilder.push_back("sudo iptables -A INPUT -s 192.168.1.0/24 -j ACCEPT");
+
         cmdbuilder.push_back("sudo iptables -A FORWARD -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT");
         cmdbuilder.push_back("sudo iptables -A FORWARD -d 192.168.1.0/24 -j DROP");
-        cmdbuilder.push_back("sudo iptables -A OUTPUT -m state --state NEW,ESTABLISHED,RELATED -j ACCEPT");
-        cmdbuilder.push_back("sudo iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE");
-        cmdbuilder.push_back("sudo iptables -A FORWARD -i vxlan1 -j ACCEPT");
+   
+        cmdbuilder.push_back("sudo iptables -A OUTPUT -j ACCEPT");
+
         cmdbuilder.push_back("sudo iptables -t nat -A PREROUTING -d 192.168.1.111 -j DNAT --to-destination 192.168.200.2");
         cmdbuilder.push_back("sudo iptables -t nat -A POSTROUTING -s 192.168.200.2 -j SNAT --to-source 192.168.1.111");
+        cmdbuilder.push_back("sudo iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE");
+
+        cmdbuilder.push_back("sudo iptables -A FORWARD -i vxlan1 -o eth0 -j ACCEPT");
+        cmdbuilder.push_back("sudo iptables -A FORWARD -i eth0 -o vxlan1 -j ACCEPT");
+
         cmdbuilder.push_back("sudo ip addr add 192.168.1.111/24 dev eth0");
         // cmdbuilder.push_back("");
         // cmdbuilder.push_back("");
@@ -339,7 +347,7 @@ int Controller::execute(int argc, char *argv[])
 
 char * sshcmd(const char * ip, std::vector<const char *> * cmdbuilder){
     size_t len = 0;
-    int CMD_MAX = 10000;
+    int CMD_MAX = 8000;
     char * buff = new char[CMD_MAX];
 
     len += snprintf(buff + len, CMD_MAX - len, "ssh -t dc-user@%s '", ip);
