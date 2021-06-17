@@ -36,13 +36,15 @@ int is_interface_online(std::string interface) {
         }
         address = address->ifa_next;
     }
-    freeifaddrs(addresses);
 
+    int retval;
     for (size_t i = 0; i < inets.size(); i++){
         if (strcmp(inets[i], interface.c_str())){
-            return 1;
+            retval = 1;
+            break;
         }
     }
-    
-    return 0;
+    retval = 0;
+    freeifaddrs(addresses);
+    return retval;
 }
