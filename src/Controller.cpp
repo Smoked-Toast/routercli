@@ -125,20 +125,109 @@ int Controller::execute(int argc, char *argv[])
         sprintf(dpath, "/mnt/dcimages/networks/vxlan%s/config/deployment", cmd.vni.c_str());
         sprintf(lpath, "/mnt/dcimages/networks/vxlan%s/lock", cmd.vni.c_str());
 
-        Deployment *d = NULL;
+        Deployment * d = NULL;
+
+        std::vector<Network *> networks;
 
         char *hostname = NULL;
-        Network * n = NULL;
+
+        char * bridge = NULL;
 
         FILE * fp = NULL;
         char * cmdstring = NULL;;
 
         std::vector<const char *> cmdbuilder;
-        const char * ip = "192.168.1.102";
-        cmdbuilder.push_back("sudo ip link add vxlan1 type vxlan id 1 dev eth0 dstport 0");
-        cmdbuilder.push_back("sudo bridge fdb append to 00:00:00:00:00:00 dst 192.168.1.14 dev vxlan1");
-        cmdbuilder.push_back("sudo ip addr add 192.168.200.1/24 dev vxlan1");
-        cmdbuilder.push_back("sudo ip link set up dev vxlan1");
+
+        
+        
+        // TODO 
+        // MAKE DYNAMIC
+        const size_t CMD_MAX = 512;
+        char createlink[CMD_MAX];
+        char addfdb[CMD_MAX];
+        
+        char linkup[CMD_MAX];
+
+
+        char input1[CMD_MAX];
+        char input2[CMD_MAX];
+        char input4[CMD_MAX];
+
+        char forward1[CMD_MAX];
+        char forward2[CMD_MAX];
+        char forward3[CMD_MAX];
+        char forward4[CMD_MAX];
+
+        char output1[CMD_MAX];
+
+        char nat1[CMD_MAX];
+        char nat2[CMD_MAX];
+        char nat3[CMD_MAX];
+
+        char natip[CMD_MAX];
+
+        // ---------
+        const char * underlay_network = "192.168.1.0/24";
+        const char * router_ip = "192.168.1.102";
+
+        const char * vm_ip_nosub = "192.168.200.2";
+        const char * nat_ip = "192.168.1.111/24";
+        const char * nat_ip_nosub = "192.168.1.111";
+        // ----------
+        bridge = new char[22];
+        sprintf(bridge, "br-lan0");
+
+        int iteration = 0;
+        std::vector <char *> setaddress;
+        std::vector <char *> input3;
+        // Build deployment object
+        if ((d = ParseDeployment(dpath)) == NULL)
+        {
+            printf("Error: parsing deployment\n");
+            retval = EXIT_FAILURE;
+            goto EXIT_DEPLOY;
+        }
+        for (size_t i = 0; i < d->subnets->size(); i++){
+            networks.push_back(new Network((*d->subnets)[i]));
+        }   
+
+        snprintf(createlink, CMD_MAX, "sudo ip link add vxlan%s type vxlan id %s dev eth0 dstport 0", cmd.vni.c_str(), cmd.vni.c_str());
+        snprintf(addfdb, CMD_MAX, "sudo bridge fdb append to 00:00:00:00:00:00 dst 192.168.1.14 dev vxlan%s", cmd.vni.c_str());
+        //snprintf(setaddress, CMD_MAX, "sudo ip addr add %s dev vxlan%s", gateway_ip, cmd.vni.c_str());
+        snprintf(linkup, CMD_MAX, "sudo ip link set up dev vxlan%s", cmd.vni.c_str());
+
+        for (size_t i = 0; i < networks.size(); i++){
+            char * setaddresstemp = new char[CMD_MAX];
+            char * input3temp = new char[CMD_MAX];
+            snprintf(setaddresstemp, CMD_MAX, "sudo ip addr add %s/24 dev vxlan%s", networks[i]->get_gatewayip(), cmd.vni.c_str());
+            snprintf(input3temp, CMD_MAX, "sudo iptables -A INPUT -s %s -d %s -p icmp --icmp-type 8 -m state --state NEW,ESTABLISHED,RELATED -j ACCEPT", networks[i]->get_cidr(), networks[i]->get_cidr());
+            setaddress.push_back(setaddresstemp);
+            input3.push_back(input3temp);
+        }  
+
+        snprintf(input1, CMD_MAX, "sudo iptables -A INPUT -m state --state ESTABLISHED,RELATED -j ACCEPT");
+        snprintf(input2, CMD_MAX, "sudo iptables -A INPUT -s %s -d %s -p icmp --icmp-type 8 -m state --state NEW,ESTABLISHED,RELATED -j ACCEPT", underlay_network, underlay_network);
+        //snprintf(input3, CMD_MAX, "sudo iptables -A INPUT -s %s -d %s -p icmp --icmp-type 8 -m state --state NEW,ESTABLISHED,RELATED -j ACCEPT", subnet, subnet);
+        snprintf(input4, CMD_MAX, "sudo iptables -A INPUT -s %s -j ACCEPT", underlay_network);
+        
+        snprintf(forward1, CMD_MAX, "sudo iptables -A FORWARD -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT");
+        snprintf(forward2, CMD_MAX, "sudo iptables -A FORWARD -d %s -j DROP", underlay_network);
+        snprintf(forward3, CMD_MAX, "sudo iptables -A FORWARD -i vxlan%s -o eth0 -j ACCEPT", cmd.vni.c_str());
+        snprintf(forward4, CMD_MAX, "sudo iptables -A FORWARD -i eth0 -o vxlan%s -j ACCEPT", cmd.vni.c_str());
+
+        snprintf(output1, CMD_MAX, "sudo iptables -A OUTPUT -j ACCEPT");
+
+        // These should be created when virtual machines are launched. Not when the router is launched.
+        snprintf(nat1, CMD_MAX, "sudo iptables -t nat -A PREROUTING -d %s -j DNAT --to-destination %s", nat_ip_nosub, vm_ip_nosub);
+        snprintf(nat2, CMD_MAX, "sudo iptables -t nat -A POSTROUTING -s %s -j SNAT --to-source %s", vm_ip_nosub, nat_ip_nosub);
+
+        snprintf(nat3, CMD_MAX, "sudo iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE");
+
+        snprintf(natip, CMD_MAX, "sudo ip addr add %s dev eth0", nat_ip);
+
+        cmdbuilder.push_back(createlink);
+        cmdbuilder.push_back(addfdb);
+        cmdbuilder.push_back(linkup);
         cmdbuilder.push_back("sudo echo 1 | sudo tee /proc/sys/net/ipv4/icmp_echo_ignore_broadcasts");
         cmdbuilder.push_back("sudo echo 0 | sudo tee /proc/sys/net/ipv4/conf/all/accept_source_route");
         cmdbuilder.push_back("sudo echo 1 | sudo tee /proc/sys/net/ipv4/tcp_syncookies");
@@ -151,48 +240,34 @@ int Controller::execute(int argc, char *argv[])
         cmdbuilder.push_back("sudo iptables --policy OUTPUT DROP");
         cmdbuilder.push_back("sudo iptables --policy FORWARD DROP");
 
-        cmdbuilder.push_back("sudo iptables -A INPUT -m state --state ESTABLISHED,RELATED -j ACCEPT");
-        cmdbuilder.push_back("sudo iptables -A INPUT -s 192.168.1.0/24 -d 192.168.1.0/24 -p icmp --icmp-type 8 -m state --state NEW,ESTABLISHED,RELATED -j ACCEPT");
-        cmdbuilder.push_back("sudo iptables -A INPUT -s 192.168.200.0/24 -d 192.168.200.0/24 -p icmp --icmp-type 8 -m state --state NEW,ESTABLISHED,RELATED -j ACCEPT");
-        cmdbuilder.push_back("sudo iptables -A INPUT -s 192.168.1.0/24 -j ACCEPT");
+        cmdbuilder.push_back(input1);
+        cmdbuilder.push_back(input2);
+        cmdbuilder.push_back(input4);
 
-        cmdbuilder.push_back("sudo iptables -A FORWARD -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT");
-        cmdbuilder.push_back("sudo iptables -A FORWARD -d 192.168.1.0/24 -j DROP");
+        for (size_t i = 0; i < networks.size(); i++){
+            cmdbuilder.push_back(setaddress[i]);
+            cmdbuilder.push_back(input3[i]);
+        }
+
+        cmdbuilder.push_back(forward1);
+        cmdbuilder.push_back(forward2);
+        cmdbuilder.push_back(forward3);
+        cmdbuilder.push_back(forward4);
    
-        cmdbuilder.push_back("sudo iptables -A OUTPUT -j ACCEPT");
+        cmdbuilder.push_back(output1);
 
-        cmdbuilder.push_back("sudo iptables -t nat -A PREROUTING -d 192.168.1.111 -j DNAT --to-destination 192.168.200.2");
-        cmdbuilder.push_back("sudo iptables -t nat -A POSTROUTING -s 192.168.200.2 -j SNAT --to-source 192.168.1.111");
-        cmdbuilder.push_back("sudo iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE");
+        cmdbuilder.push_back(nat1);
+        cmdbuilder.push_back(nat2);
+        cmdbuilder.push_back(nat3);
 
-        cmdbuilder.push_back("sudo iptables -A FORWARD -i vxlan1 -o eth0 -j ACCEPT");
-        cmdbuilder.push_back("sudo iptables -A FORWARD -i eth0 -o vxlan1 -j ACCEPT");
+        cmdbuilder.push_back(natip);
 
-        cmdbuilder.push_back("sudo ip addr add 192.168.1.111/24 dev eth0");
-        // cmdbuilder.push_back("");
-        // cmdbuilder.push_back("");
-        // cmdbuilder.push_back("");
-        // cmdbuilder.push_back("");
-        // cmdbuilder.push_back("");
-
-
-        int iteration = 0;
-        cmdstring = sshcmd(ip, &cmdbuilder);
+        cmdstring = sshcmd(router_ip, &cmdbuilder);
         if (cmdstring == NULL){
             printf("Error: ssh command too large\n");
             retval = EXIT_FAILURE;
             goto EXIT_DEPLOY;
         }
-
-        // Build deployment object
-        if ((d = ParseDeployment(dpath)) == NULL)
-        {
-            printf("Error: parsing deployment\n");
-            retval = EXIT_FAILURE;
-            goto EXIT_DEPLOY;
-        }
-
-        n = new Network();
 
         // Get this computer's hostname
         if ((hostname = getHostname()) == NULL) {
@@ -216,16 +291,16 @@ int Controller::execute(int argc, char *argv[])
         }
 
         //ip link add br-vxlan1 type bridge
-        createbridgeBuilder(&createbridge, n);
+        createbridgeBuilder(&createbridge, bridge);
 
         //ip link set br-vxlan1 up
-        upbridgeBuilder(&upbridge, n);
+        upbridgeBuilder(&upbridge, bridge);
 
         //virt-install
         spawnvmBuilder(&spawnvm, d);
 
 
-        if (is_interface_online(n->bridge) == 0) {
+        if (is_interface_online(bridge) == 0) {
             this->Sandbox(&createbridge[0]);
             this->Sandbox(&upbridge[0]);
 
@@ -270,9 +345,19 @@ int Controller::execute(int argc, char *argv[])
         if (d != NULL){
             delete d;
         }
-        if (n != NULL){
-            delete n;
+        if (bridge != NULL){
+            delete [] bridge;
         }
+
+        for (size_t i = 0; i < networks.size(); i++){
+            delete networks[i];
+        }
+
+        for (size_t i = 0; i < setaddress.size(); i++){
+            delete [] setaddress[i];
+            delete [] input3[i];
+        }
+
     }
     else if (cmd.action == DESTROY)
     {
@@ -289,7 +374,7 @@ int Controller::execute(int argc, char *argv[])
         sprintf(lpath, "/mnt/dcimages/networks/vxlan%s/lock", cmd.vni.c_str());
 
         Deployment * d;
-        Network * n;
+        char * bridge;
 
         if ((d = ParseDeployment(dpath)) == NULL) {
             printf("Error: parsing deployment");
@@ -297,7 +382,8 @@ int Controller::execute(int argc, char *argv[])
             goto EXIT_DESTROY;
         }
 
-        n = new Network();
+        bridge = new char[22];
+        sprintf(bridge, "br-lan0");
         
         // Get this computer's hostname
         if ((hostname = getHostname()) == NULL){
@@ -337,8 +423,8 @@ int Controller::execute(int argc, char *argv[])
         if (d != NULL){
             delete d;
         }
-        if (n != NULL){
-            delete n;
+        if (bridge != NULL){
+            delete bridge;
         }
     }
 

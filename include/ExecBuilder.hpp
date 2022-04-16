@@ -7,10 +7,10 @@
 
 void createlinkBuilder(std::vector<char *> *cmd, Network *n);
 void addfdbBuilder(std::vector<char *> *cmd, Network *n);
-void createbridgeBuilder(std::vector<char *> *cmd, Network *n);
+void createbridgeBuilder(std::vector<char *> *cmd, char * bridge);
 void setmasterBuilder(std::vector<char *> *cmd, Network *n);
 void upinterfaceBuilder(std::vector<char *> *cmd, Network *n);
-void upbridgeBuilder(std::vector<char *> *cmd, Network *n);
+void upbridgeBuilder(std::vector<char *> *cmd, char * bridge);
 void spawnvmBuilder(std::vector<char *> *cmd, Deployment *d);
 void destroyvmBuilder(std::vector<char *> *cmd, Deployment *d);
 void undefinevmBuilder(std::vector<char *> *cmd, Deployment *d);

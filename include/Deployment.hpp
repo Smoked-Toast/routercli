@@ -2,6 +2,7 @@
 #define DEPLOYMENT_H
 #include <stdio.h>
 #include <string.h>
+#include <vector>
 
 
 class Deployment {
@@ -15,6 +16,8 @@ public:
     char * bootdisk;
     char * configdisk;
     char * networkconfig;
+
+    std::vector<char *> * subnets;
 
     Deployment();
 

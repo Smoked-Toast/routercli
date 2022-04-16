@@ -6,6 +6,31 @@
 #include <regex>
 #include <fstream>
 
+std::vector<char *> * subnetlist2vector(char * subnets){
+    char * subnet = new char[50];
+    char * subnet_copy = subnet;
+    char * subnets_copy = subnets;
+    std::vector<char *> * results = new std::vector<char *>();
+
+    //int word_index = 0;
+    while (*subnets_copy) {
+        if (*subnets_copy == ','){
+            *subnet_copy = '\0';
+            results->push_back(subnet);
+            subnet = new char[50];
+            subnet_copy = subnet;
+            subnets_copy++;
+        }
+        else {
+            *subnet_copy++ = *subnets_copy++;
+        }
+    }
+    *subnet_copy = '\0';
+    results->push_back(subnet);
+
+    return results;
+}
+
 Deployment::Deployment(){}
 
 Deployment::~Deployment(){
@@ -17,6 +42,11 @@ Deployment::~Deployment(){
     delete [] bootdisk;
     delete [] configdisk;
     delete [] networkconfig;
+
+    for (size_t i = 0; i < subnets->size(); i++){
+        delete [] (*subnets)[i];
+    }
+    delete subnets;
 }
 
 
@@ -36,6 +66,10 @@ int Deployment::add(char * name, char * property){
     }
     else if (strcmp(name,"mac")==0){
         mac = property;
+    }
+    else if (strcmp(name,"subnets")==0){
+        subnets = subnetlist2vector(property);
+        delete [] property;
     } 
     else {
         return EXIT_FAILURE;

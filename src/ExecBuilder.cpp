@@ -4,23 +4,23 @@
 #include "../include/Network.hpp"
 #include "../include/Deployment.hpp"
 
-void createbridgeBuilder(std::vector<char *> *cmd, Network *n)
+void createbridgeBuilder(std::vector<char *> *cmd, char * bridge)
 {
     cmd->push_back((char *)"/usr/sbin/ip");
     cmd->push_back((char *)"link");
     cmd->push_back((char *)"add");
-    cmd->push_back((char *)n->bridge);
+    cmd->push_back(bridge);
     cmd->push_back((char *)"type");
     cmd->push_back((char *)"bridge");
     cmd->push_back(NULL);
 }
 
-void upbridgeBuilder(std::vector<char *> *cmd, Network *n)
+void upbridgeBuilder(std::vector<char *> *cmd, char * bridge)
 {
     cmd->push_back((char *)"/usr/sbin/ip");
     cmd->push_back((char *)"link");
     cmd->push_back((char *)"set");
-    cmd->push_back((char *)n->bridge);
+    cmd->push_back(bridge);
     cmd->push_back((char *)"up");
     cmd->push_back(NULL);
 }
@@ -68,11 +68,11 @@ void undefinevmBuilder(std::vector<char *> *cmd, Deployment *d)
     cmd->push_back(NULL);
 }
 
-void deletebridgeBuilder(std::vector<char *> *cmd, Network *n)
+void deletebridgeBuilder(std::vector<char *> *cmd, char * bridge)
 {
     cmd->push_back((char *)"/usr/sbin/ip");
     cmd->push_back((char *)"link");
     cmd->push_back((char *)"delete");
-    cmd->push_back((char *)n->bridge);
+    cmd->push_back(bridge);
     cmd->push_back(NULL);
 }
